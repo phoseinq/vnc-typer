@@ -1,5 +1,9 @@
 # VNC Typer
 
+<p align="center">
+  <img src="screenshot.png" alt="VNC Typer popup" width="300">
+</p>
+
 Chrome extension that **types** passwords or commands into web VNC sessions
 (noVNC, Guacamole, Proxmox/oVirt console…) where clipboard paste doesn't work.
 It sends real keyboard key-events, one character at a time.
