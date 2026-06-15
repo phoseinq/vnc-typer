@@ -10,7 +10,7 @@ const els = {
   status: $("status"), bar: document.querySelector(".bar"), fill: $("fill"),
 };
 
-const DEFAULTS = { speed: "fast", method: "debugger", delay: 500, enter: false, mask: true, theme: "dark" };
+const DEFAULTS = { speed: "fast", method: "synthetic", delay: 500, enter: false, mask: true, theme: "dark" };
 
 // inline Lucide-style icons
 const svg = (paths) =>
