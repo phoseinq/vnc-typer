@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>VNC Typer</title>
+</head>
+<body>
+  <header class="hdr">
+    <span class="logo">&gt;_</span>
+    <h1>VNC Typer</h1>
+    <button id="theme" class="theme-btn" title="Toggle light / dark" type="button"></button>
+  </header>
+
+  <main>
+    <div class="ta-wrap">
+      <textarea id="text" rows="3" spellcheck="false" autocomplete="off"
+        placeholder="Type password or command…  (Enter to send · Shift+Enter for new line)"></textarea>
+      <button id="mask" class="icon-btn" title="Hide / show text" type="button"></button>
+    </div>
+
+    <div class="row">
+      <span class="lbl">Speed</span>
+      <div class="seg" id="speed">
+        <button data-v="slow">Slow</button>
+        <button data-v="normal">Normal</button>
+        <button data-v="fast" class="on">Fast</button>
+        <button data-v="instant">Instant</button>
+      </div>
+    </div>
+
+    <div class="opts">
+      <div class="opts-left">
+        <label class="mini">
+          <span>Method</span>
+          <select id="method">
+            <option value="debugger">Debugger · reliable</option>
+            <option value="synthetic">Synthetic · no banner</option>
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="enter" />
+          <span>Send <kbd>Enter</kbd> at end</span>
+        </label>
+      </div>
+
+      <div class="dial-wrap">
+        <span class="dial-label">Start delay</span>
+        <div id="dial" class="dial" tabindex="0" role="slider"
+             aria-label="Start delay in milliseconds"
+             aria-valuemin="0" aria-valuemax="3000" aria-valuenow="500"
+             title="Drag around · scroll · arrow keys">
+          <svg viewBox="0 0 80 80">
+            <defs>
+              <linearGradient id="dg" x1="0" y1="0" x2="1" y2="1">
+                <stop class="s1" offset="0" />
+                <stop class="s2" offset="1" />
+              </linearGradient>
+            </defs>
+            <circle class="dial-track" cx="40" cy="40" r="34" transform="rotate(135 40 40)" />
+            <circle class="dial-prog" cx="40" cy="40" r="34" transform="rotate(135 40 40)" />
+            <circle class="dial-handle" cx="6" cy="40" r="5" />
+          </svg>
+          <div class="dial-val"><b id="dialNum">500</b><i>MS</i></div>
+        </div>
+      </div>
+    </div>
+
+    <button id="go" class="go" type="button">
+      <span class="kbd-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg></span>
+      Type into VNC
+    </button>
+
+    <div id="status" class="status"></div>
+    <div class="bar"><div id="fill" class="fill"></div></div>
+
+    <p class="hint">Click inside the VNC screen first, then press Type.</p>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
