@@ -23,7 +23,8 @@ const ICONS = {
 };
 function setMaskIcon() {
   const masked = els.text.classList.contains("masked");
-  els.mask.innerHTML = masked ? ICONS.eye : ICONS.eyeOff;
+  // icon reflects current state: hidden => slashed eye, visible => open eye
+  els.mask.innerHTML = masked ? ICONS.eyeOff : ICONS.eye;
 }
 
 // ---- rotary "Start delay" dial -------------------------------------------
