@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<!-- Open in a browser (or run headless) — asserts the key-event mapping and the
+     command splitting. Fails loudly in the console. -->
+<meta charset="utf-8" />
+<title>VNC Typer self-test</title>
+<textarea id="t"></textarea>
+<pre id="out"></pre>
+<script src="background.js"></script>
+<script>
+const log = [];
+function ok(cond, what) { log.push((cond ? "PASS " : "FAIL ") + what); if (!cond) window.__failed = true; }
+
+// --- command splitting -----------------------------------------------------
+ok(JSON.stringify(splitCommands("a\nb\n")) === '["a","b"]', "trailing newline dropped");
+ok(JSON.stringify(splitCommands("a\r\nb")) === '["a","b"]', "CRLF normalised");
+ok(JSON.stringify(splitCommands("solo")) === '["solo"]', "single line");
+ok(JSON.stringify(splitCommands("")) === '[""]', "empty text still one entry");
+
+// --- key events ------------------------------------------------------------
+const ta = document.getElementById("t");
+const seen = [];
+for (const t of ["keydown", "keypress", "keyup", "input"]) {
+  ta.addEventListener(t, (e) => seen.push({
+    type: e.type, key: e.key, code: e.code,
+    keyCode: e.keyCode, charCode: e.charCode, which: e.which, data: e.data,
+  }));
+}
+ta.focus();
+
+pageTypeFn("/A\n", 0).then(() => {
+  const slashDown = seen.find((e) => e.type === "keydown" && e.key === "/");
+  const slashPress = seen.find((e) => e.type === "keypress" && e.key === "/");
+  const slashInput = seen.find((e) => e.type === "input" && e.data === "/");
+  ok(slashDown && slashDown.code === "Slash" && slashDown.keyCode === 191 && slashDown.charCode === 0,
+     "keydown '/' carries the virtual key code 191");
+  // The bug: keypress used to carry 191 too, so charCode-reading terminals got junk.
+  ok(slashPress && slashPress.charCode === 47 && slashPress.which === 47 && slashPress.keyCode === 47,
+     "keypress '/' carries charCode 47");
+  ok(!!slashInput, "editable target also gets an insertText input event");
+
+  const shiftDown = seen.find((e) => e.type === "keydown" && e.key === "Shift");
+  const upperPress = seen.find((e) => e.type === "keypress" && e.key === "A");
+  ok(!!shiftDown, "Shift pressed for uppercase");
+  ok(upperPress && upperPress.charCode === 65, "keypress 'A' carries charCode 65");
+
+  const enterPress = seen.find((e) => e.type === "keypress" && e.key === "Enter");
+  ok(enterPress && enterPress.charCode === 13, "keypress Enter carries charCode 13");
+  ok(!seen.some((e) => e.type === "input" && e.data === "\n"), "Enter does not fake an input event");
+
+  document.getElementById("out").textContent = log.join("\n");
+  console.log(log.join("\n"));
+  console.log(window.__failed ? "SELFTEST FAILED" : "SELFTEST OK");
+});
+</script>

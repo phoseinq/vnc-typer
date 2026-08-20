@@ -4,7 +4,9 @@
 //                  Most reliable; works with any canvas-based VNC client (noVNC, Guacamole...).
 //   - "synthetic": dispatch KeyboardEvent in the page => no "debugging" banner, slightly less robust.
 
-const SPEED_DELAY = { slow: 70, normal: 35, fast: 12, instant: 2 };
+// ponytail: fixed gap between commands. The tty buffers stdin, so this only has
+// to cover the client's redraw; expose it in the UI if a slow command needs more.
+const LINE_DELAY = 400;
 
 // US-layout key descriptors -------------------------------------------------
 const SHIFT = {
@@ -45,14 +47,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------------------
 let busy = false;
+let liveTabId = null;
 
 function setBadge(text, color = "#6366f1") {
   chrome.action.setBadgeBackgroundColor({ color });
   chrome.action.setBadgeText({ text });
 }
-function notifyPopup(msg) {
-  // Best-effort; only delivered if the popup is open.
+function notify(msg) {
+  // Best-effort; the popup only hears it while open, the in-page panel while pinned.
   chrome.runtime.sendMessage(msg).catch(() => {});
+  if (liveTabId != null) chrome.tabs.sendMessage(liveTabId, msg).catch(() => {});
 }
 
 // Debugger engine -----------------------------------------------------------
@@ -105,31 +109,26 @@ async function pressKeyDebugger(tabId, d) {
   }
 }
 
-async function typeWithDebugger(tabId, text, perKeyDelay) {
-  await attach(tabId);
-  try {
-    const chars = Array.from(text);
-    for (let i = 0; i < chars.length; i++) {
-      await pressKeyDebugger(tabId, describeChar(chars[i]));
-      notifyPopup({ type: "progress", phase: "typing", done: i + 1, total: chars.length });
-      setBadge("…");
-      if (perKeyDelay) await sleep(perKeyDelay);
-    }
-  } finally {
-    await detach(tabId);
-  }
-}
-
 // Synthetic engine (runs inside the page) -----------------------------------
-async function typeWithSynthetic(tabId, text, perKeyDelay) {
-  const total = Array.from(text).length;
-  notifyPopup({ type: "progress", phase: "typing", done: 0, total });
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    args: [text, perKeyDelay],
-    func: pageTypeFn,
-  });
-  notifyPopup({ type: "progress", phase: "typing", done: total, total });
+// Web consoles are usually inside an iframe, so find the frame that actually
+// holds the session instead of always typing into the top document.
+async function pickFrame(tabId) {
+  try {
+    const res = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => {
+        const ae = document.activeElement;
+        const innermost = document.hasFocus() && !(ae && ae.tagName === "IFRAME");
+        const console_ = !!document.querySelector("canvas, .xterm");
+        return (innermost ? 2 : 0) + (console_ ? 1 : 0);
+      },
+    });
+    let best = { frameId: 0, result: -1 };
+    for (const r of res) if ((r.result ?? -1) > best.result) best = r;
+    return best.frameId;
+  } catch {
+    return 0;
+  }
 }
 
 // This function is serialized and runs in the page context.
@@ -159,30 +158,82 @@ function pageTypeFn(text, perKeyDelay) {
     return [ch, "", 0, false];
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const target = document.activeElement && document.activeElement !== document.body
-    ? document.activeElement
-    : (document.querySelector("canvas") || document.body);
-  function fire(type, key, code, keyCode, shift) {
-    const ev = new KeyboardEvent(type, {
-      key, code, keyCode, which: keyCode,
+
+  // Never type into our own pinned panel.
+  const ae = document.activeElement;
+  const target = ae && ae !== document.body && ae.id !== "vnc-typer-panel"
+    ? ae
+    : (document.querySelector("canvas, .xterm-helper-textarea, textarea") || document.body);
+  const editable = target.isContentEditable
+    || target.tagName === "TEXTAREA" || target.tagName === "INPUT";
+
+  // charCode is what a real browser puts on keypress — the *character*, not the
+  // virtual key code. Without it a terminal reading charCode turns "/" into junk.
+  function fire(type, key, code, keyCode, shift, charCode) {
+    return target.dispatchEvent(new KeyboardEvent(type, {
+      key, code,
+      keyCode: charCode || keyCode,
+      charCode: charCode || 0,
+      which: charCode || keyCode,
       shiftKey: shift, bubbles: true, cancelable: true, composed: true,
-    });
-    target.dispatchEvent(ev);
+    }));
   }
+
   return (async () => {
     for (const ch of Array.from(text)) {
       const [key, code, keyCode, shift] = desc(ch);
-      if (shift) fire("keydown", "Shift", "ShiftLeft", 16, true);
-      fire("keydown", key, code, keyCode, shift);
-      if (key.length === 1) fire("keypress", key, code, keyCode, shift);
-      fire("keyup", key, code, keyCode, shift);
-      if (shift) fire("keyup", "Shift", "ShiftLeft", 16, false);
+      const cp = ch === "\n" ? 13 : (key.length === 1 ? ch.codePointAt(0) : 0);
+      if (shift) fire("keydown", "Shift", "ShiftLeft", 16, true, 0);
+      const live = fire("keydown", key, code, keyCode, shift, 0);
+      if (live && cp) {
+        const pressed = fire("keypress", key, code, keyCode, shift, cp);
+        // Last resort for clients that only listen for input (xterm.js's hidden
+        // textarea does): hand them the character directly.
+        if (pressed && editable && ch !== "\n") {
+          target.dispatchEvent(new InputEvent("input", {
+            data: ch, inputType: "insertText", bubbles: true, composed: false,
+          }));
+        }
+      }
+      fire("keyup", key, code, keyCode, shift, 0);
+      if (shift) fire("keyup", "Shift", "ShiftLeft", 16, false, 0);
       if (perKeyDelay) await sleep(perKeyDelay);
     }
   })();
 }
 
 // Job orchestration ---------------------------------------------------------
+async function makeTyper(method, tabId, perKeyDelay) {
+  if (method === "synthetic") {
+    const frameIds = [await pickFrame(tabId)];
+    return {
+      type: (s) => s
+        ? chrome.scripting.executeScript({
+            target: { tabId, frameIds }, args: [s, perKeyDelay], func: pageTypeFn,
+          })
+        : Promise.resolve(),
+      done: async () => {},
+    };
+  }
+  await attach(tabId);
+  return {
+    type: async (s) => {
+      for (const ch of Array.from(s)) {
+        await pressKeyDebugger(tabId, describeChar(ch));
+        if (perKeyDelay) await sleep(perKeyDelay);
+      }
+    },
+    done: () => detach(tabId),
+  };
+}
+
+// "a\nb\n" => ["a", "b"] — one command per line, no phantom trailing Enter.
+function splitCommands(text) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
 async function runJob({ text, method, perKeyDelay, startDelay, enterAtEnd }) {
   if (busy) return { ok: false, error: "A typing job is already running." };
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -192,29 +243,44 @@ async function runJob({ text, method, perKeyDelay, startDelay, enterAtEnd }) {
     return { ok: false, error: "This page can't be controlled (browser/internal page)." };
   }
 
-  let body = text.replace(/\r\n/g, "\n");
-  if (enterAtEnd && !body.endsWith("\n")) body += "\n";
+  // Each line is its own command: type it, press Enter, let it land, next.
+  const lines = splitCommands(text);
+  const total = lines.reduce((n, l) => n + Array.from(l).length + 1, 0);
 
   busy = true;
+  liveTabId = tab.id;
+  let done = 0;
   try {
     // Countdown so the user can make sure the VNC canvas has focus.
     for (let s = Math.ceil(startDelay / 1000); s > 0; s--) {
       setBadge(String(s), "#0ea5e9");
-      notifyPopup({ type: "progress", phase: "countdown", remaining: s });
+      notify({ type: "progress", phase: "countdown", remaining: s });
       await sleep(Math.min(1000, startDelay));
     }
-    notifyPopup({ type: "progress", phase: "typing", done: 0, total: Array.from(body).length });
+    notify({ type: "progress", phase: "typing", done: 0, total });
+    setBadge("…");
 
-    if (method === "synthetic") await typeWithSynthetic(tab.id, body, perKeyDelay);
-    else await typeWithDebugger(tab.id, body, perKeyDelay);
+    const typer = await makeTyper(method, tab.id, perKeyDelay);
+    try {
+      for (let i = 0; i < lines.length; i++) {
+        const last = i === lines.length - 1;
+        await typer.type(lines[i]);
+        done += Array.from(lines[i]).length;
+        if (!last || enterAtEnd) { await typer.type("\n"); done++; }
+        notify({ type: "progress", phase: "typing", done, total });
+        if (!last) await sleep(LINE_DELAY);
+      }
+    } finally {
+      await typer.done();
+    }
 
     setBadge("✓", "#16a34a");
-    notifyPopup({ type: "done" });
+    notify({ type: "done" });
     setTimeout(() => chrome.action.setBadgeText({ text: "" }), 2500);
     return { ok: true };
   } catch (err) {
     setBadge("ERR", "#dc2626");
-    notifyPopup({ type: "error", message: String(err && err.message || err) });
+    notify({ type: "error", message: String(err && err.message || err) });
     setTimeout(() => chrome.action.setBadgeText({ text: "" }), 4000);
     return { ok: false, error: String(err && err.message || err) };
   } finally {
@@ -222,12 +288,14 @@ async function runJob({ text, method, perKeyDelay, startDelay, enterAtEnd }) {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && msg.action === "type") {
-    runJob(msg).then(sendResponse);
-    return true; // async response
-  }
-});
-
-// Safety: if the user closes DevTools / cancels, keep our state consistent.
-chrome.debugger.onDetach.addListener(() => { /* no-op; finally handles cleanup */ });
+// Guarded so selftest.html can load this file as a plain script.
+if (globalThis.chrome?.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg && msg.action === "type") {
+      runJob(msg).then(sendResponse);
+      return true; // async response
+    }
+  });
+  // Safety: if the user closes DevTools / cancels, keep our state consistent.
+  chrome.debugger.onDetach.addListener(() => { /* no-op; finally handles cleanup */ });
+}

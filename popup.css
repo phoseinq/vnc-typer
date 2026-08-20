@@ -89,6 +89,7 @@ html, body {
   display: grid; place-items: center;
   transition: background .15s, border-color .15s, transform .1s;
 }
+.hdr-btns { display: flex; gap: 6px; }
 .theme-btn:hover { background: var(--card-hi); }
 .theme-btn:active { transform: scale(.92); }
 

@@ -3,7 +3,7 @@ const SPEED_DELAY = { slow: 70, normal: 35, fast: 12, instant: 2 };
 
 const els = {
   text: $("text"), mask: $("mask"), speed: $("speed"), enter: $("enter"),
-  method: $("method"), go: $("go"), theme: $("theme"),
+  method: $("method"), go: $("go"), theme: $("theme"), pin: $("pin"),
   dial: $("dial"), dialNum: $("dialNum"),
   dialProg: document.querySelector(".dial-prog"),
   dialHandle: document.querySelector(".dial-handle"),
@@ -20,7 +20,9 @@ const ICONS = {
   sun: svg(`<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>`),
   eye: svg(`<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>`),
   eyeOff: svg(`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-6.5 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`),
+  pin: svg(`<path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z"/>`),
 };
+els.pin.innerHTML = ICONS.pin;
 function setMaskIcon() {
   const masked = els.text.classList.contains("masked");
   // icon reflects current state: hidden => slashed eye, visible => open eye
@@ -148,6 +150,21 @@ els.theme.addEventListener("click", () => {
   saveSettings();
 });
 
+// Drop a panel onto the page — it stays put until you close it, so you don't
+// have to reopen this popup between commands.
+els.pin.addEventListener("click", async () => {
+  saveSettings();
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["overlay.js"] });
+    if (els.text.value) await chrome.tabs.sendMessage(tab.id, { type: "seed", text: els.text.value });
+    window.close();
+  } catch (e) {
+    setStatus("Can't pin here: " + e.message, "err");
+  }
+});
+
 // Enter => send · Shift+Enter => new line
 els.text.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); start(); }
@@ -198,6 +215,7 @@ chrome.runtime.onMessage.addListener((m) => {
     setStatus(`Typing… ${m.done}/${m.total}`, "run");
   } else if (m.type === "done") {
     els.fill.style.width = "100%";
+    els.text.value = "";           // don't leave a password / command sitting there
     finish("Done ✓", "ok");
   } else if (m.type === "error") {
     finish("Failed: " + m.message, "err");

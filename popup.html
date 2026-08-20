@@ -10,13 +10,16 @@
   <header class="hdr">
     <span class="logo">&gt;_</span>
     <h1>VNC Typer</h1>
-    <button id="theme" class="theme-btn" title="Toggle light / dark" type="button"></button>
+    <div class="hdr-btns">
+      <button id="pin" class="theme-btn" title="Pin a panel onto the page (stays open)" type="button"></button>
+      <button id="theme" class="theme-btn" title="Toggle light / dark" type="button"></button>
+    </div>
   </header>
 
   <main>
     <div class="ta-wrap">
       <textarea id="text" rows="3" spellcheck="false" autocomplete="off"
-        placeholder="Type password or command…  (Enter to send · Shift+Enter for new line)"></textarea>
+        placeholder="Password, or one command per line…  (Enter to send · Shift+Enter for new line)"></textarea>
       <button id="mask" class="icon-btn" title="Hide / show text" type="button"></button>
     </div>
 
@@ -75,7 +78,7 @@
     <div id="status" class="status"></div>
     <div class="bar"><div id="fill" class="fill"></div></div>
 
-    <p class="hint">Click inside the VNC screen first, then press Type.</p>
+    <p class="hint">Click inside the VNC screen first, then press Type. Each line runs as its own command.</p>
   </main>
 
   <script src="popup.js"></script>

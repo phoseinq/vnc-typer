@@ -27,6 +27,8 @@
 
 **Key Features:**
 - ⌨️ **Real keystrokes** — character-by-character, works where paste is disabled
+- 📌 **Pinned panel** — drop a draggable panel onto the page and keep firing commands without reopening the popup
+- 📜 **One command per line** — multi-line text is sent line by line, Enter after each, with a pause in between
 - 🧩 **Two engines** — *Synthetic* (default, no banner) or *Debugger* (trusted DevTools events)
 - 🎚️ **Speed control** — Slow / Normal / Fast / Instant for slow or laggy servers
 - ⏱️ **Rotary delay dial** — animated countdown so you can focus the VNC first
@@ -60,7 +62,8 @@
 | **Speed** | Per-key delay: Slow / Normal / Fast / Instant (lower it if characters get dropped) |
 | **Start delay** | Rotary dial — countdown before typing starts (default 100 ms) |
 | **Method** | `Synthetic` dispatches key events in the page · `Debugger` injects trusted events via DevTools |
-| **Send Enter at end** | Presses Enter after the text to run the command |
+| **Send Enter at end** | Presses Enter after the last line to run the command |
+| **Pin** | Injects a panel into the page — drag it around, it stays until you close it with ✕ |
 | **Eye toggle** | Hide / show the text (for passwords) |
 | **Theme** | Switch light / dark |
 
@@ -110,6 +113,8 @@ If this project helped you, please consider:
 
 **امکانات کلیدی:**
 - ⌨️ **کیبورد واقعی** — کاراکتر به کاراکتر، جایی که paste غیرفعال است هم کار می‌کند
+- 📌 **پنل پین‌شونده** — یک پنل قابل جابه‌جایی روی خود صفحه می‌نشیند تا برای هر کامند دوباره پاپ‌آپ را باز نکنی
+- 📜 **هر خط یک کامند** — متن چندخطی خط‌به‌خط فرستاده می‌شود، بعد هر خط Enter و کمی مکث
 - 🧩 **دو موتور** — *Synthetic* (پیش‌فرض، بدون نوار دیباگ) یا *Debugger* (رویدادهای واقعی DevTools)
 - 🎚️ **کنترل سرعت** — Slow / Normal / Fast / Instant برای سرورهای کند
 - ⏱️ **دایل چرخشی تاخیر** — شمارش معکوس انیمیشن‌دار تا اول VNC را فوکوس کنی
@@ -143,7 +148,8 @@ If this project helped you, please consider:
 | **Speed** | تاخیر هر کلید: Slow / Normal / Fast / Instant (اگر کاراکتر جا افتاد کمترش کن) |
 | **Start delay** | دایل چرخشی — شمارش معکوس قبل از شروع تایپ (پیش‌فرض ۱۰۰ms) |
 | **Method** | `Synthetic` رویدادها را داخل صفحه می‌فرستد · `Debugger` رویدادهای واقعی را با DevTools تزریق می‌کند |
-| **Send Enter at end** | بعد از متن یک Enter می‌زند تا کامند اجرا شود |
+| **Send Enter at end** | بعد از آخرین خط یک Enter می‌زند تا کامند اجرا شود |
+| **Pin** | یک پنل داخل صفحه تزریق می‌کند — قابل جابه‌جایی، تا وقتی ✕ را نزنی می‌ماند |
 | **آیکون چشم** | مخفی / نمایش متن (برای پسورد) |
 | **Theme** | تغییر تم روشن / تاریک |
 
